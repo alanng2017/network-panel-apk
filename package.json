@@ -1,0 +1,9 @@
+{
+  "name": "network-panel",
+  "version": "1.0.0",
+  "description": "随身WiFi管理网络面板",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo Build complete"
+  }
+}

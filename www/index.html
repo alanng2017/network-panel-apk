@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网络面板</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 10px; }
+.card { background: white; border-radius: 10px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.card h2 { font-size: 16px; margin-bottom: 10px; color: #333; display: flex; align-items: center; }
+.card h2 .icon { margin-right: 8px; font-size: 18px; }
+.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.stat-item { background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center; }
+.stat-value { font-size: 20px; font-weight: bold; color: #1890ff; }
+.stat-label { font-size: 12px; color: #999; margin-top: 4px; }
+.device-list { list-style: none; }
+.device-list li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+.device-list li:last-child { border-bottom: none; }
+.signal-good { color: #52c41a; }
+.signal-medium { color: #faad14; }
+.signal-weak { color: #f5222d; }
+.refresh-btn { background: #1890ff; color: white; border: none; padding: 10px 20px; border-radius: 6px; width: 100%; font-size: 14px; cursor: pointer; }
+.refresh-btn:hover { background: #40a9ff; }
+.status-text { font-size: 14px; color: #666; padding: 10px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2><span class="icon">📡</span>设备状态</h2>
+    <div class="stat-grid">
+      <div class="stat-item">
+        <div class="stat-value" id="cpu">--</div>
+        <div class="stat-label">CPU 使用率</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="mem">--</div>
+        <div class="stat-label">内存使用率</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="temp">--</div>
+        <div class="stat-label">设备温度</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="uptime">--</div>
+        <div class="stat-label">运行时间</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="icon">📶</span>蜂窝信号</h2>
+    <div class="stat-grid">
+      <div class="stat-item">
+        <div class="stat-value" id="rsrp">--</div>
+        <div class="stat-label">RSRP (dBm)</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="sinr">--</div>
+        <div class="stat-label">SINR (dB)</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="band">--</div>
+        <div class="stat-label">频段</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="mode">--</div>
+        <div class="stat-label">网络模式</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="icon">📶</span>Wi-Fi 设置</h2>
+    <div class="stat-item" style="text-align:left; margin-bottom:8px;">
+      <div style="font-size:12px;color:#999;">SSID</div>
+      <div style="font-size:16px;font-weight:bold;" id="ssid">--</div>
+    </div>
+    <div class="stat-item" style="text-align:left;">
+      <div style="font-size:12px;color:#999;">Wi-Fi 密码</div>
+      <div style="font-size:16px;font-weight:bold;" id="wifikey">--</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="icon">🔌</span>已连接设备 (<span id="devcount">0</span>)</h2>
+    <ul class="device-list" id="devicelist"></ul>
+  </div>
+
+  <button class="refresh-btn" onclick="refresh()">🔄 刷新数据</button>
+
+  <div class="status-text">
+    说明：请在同一局域网内使用此页面。如果数据加载失败，请检查路由器连接。
+  </div>
+
+<script>
+const API = 'http://192.168.66.1/cgi-bin/luci/nradio/status/runtime/wan,cpe,cpe_4,cpe_6,cpe1,cpe1_4,cpe1_6';
+
+async function refresh() {
+  try {
+    const res = await fetch(API);
+    const data = await res.json();
+    const g = data.result.global;
+    const cpe = data.result.cpe[0];
+    const wlan = data.result.wlan.radio[0];
+
+    document.getElementById('cpu').textContent = g.cpu_percent + '%';
+    document.getElementById('mem').textContent = g.mem_percent + '%';
+    document.getElementById('temp').textContent = g.device_temp + '°C';
+    document.getElementById('uptime').textContent = formatUptime(g.uptime);
+    document.getElementById('rsrp').textContent = cpe.rsrp;
+    document.getElementById('sinr').textContent = cpe.sinr;
+    document.getElementById('band').textContent = 'B' + cpe.band;
+    document.getElementById('mode').textContent = cpe.mode;
+    document.getElementById('ssid').textContent = wlan.ssid;
+    document.getElementById('wifikey').textContent = wlan.key;
+
+    const devs = [...data.result.terminal_all.client, ...data.result.terminal];
+    document.getElementById('devcount').textContent = devs.length;
+    document.getElementById('devicelist').innerHTML = devs.map(d => `
+      <li>
+        <span>🖥️ ${d.hostname || d.mac}<br>
+        <small style="color:#999">${d.type} · ${d.ipaddr}</small></span>
+        <span style="color:#52c41a;">在线</span>
+      </li>
+    `).join('');
+  } catch(e) {
+    console.error(e);
+    document.getElementById('cpu').textContent = '连接失败';
+  }
+}
+
+function formatUptime(s) {
+  const d = Math.floor(s/86400);
+  const h = Math.floor((s%86400)/3600);
+  const m = Math.floor((s%3600)/60);
+  return d>0 ? `${d}天${h}时` : h>0 ? `${h}时${m}分` : `${m}分`;
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
